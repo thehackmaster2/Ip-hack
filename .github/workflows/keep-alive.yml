@@ -1,32 +1,43 @@
-# .github/workflows/keep-alive.yml
-name: Keep HF Space Alive
+name: Keep HF Space Alive Forever
 
 on:
   schedule:
-    - cron: '* * * * *'  # every 1 minute (GitHub minimum)
-  workflow_dispatch:       # manual trigger
+    - cron: '*/2 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping HF Space every 5 seconds for 1 minute
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Ping HF Space every 5 seconds
         run: |
-          DIRECT_URL="https://juniorirumva-vg.hf.space/"
-          HF_URL="https://huggingface.co/spaces/juniorirumva/vg"
-          
+          URL="https://juniorirumva-vg.hf.space/"
           for i in {1..12}; do
-            # Ping the direct Space URL (this is what keeps it alive)
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$DIRECT_URL")
-            echo "Ping $i/12 - Direct URL Status: $STATUS - $(date)"
-            
-            if [ "$STATUS" == "200" ]; then
-              echo "✅ Space is alive"
-            else
-              echo "⚠️ Space returned $STATUS - trying HF URL..."
-              STATUS2=$(curl -s -o /dev/null -w "%{http_code}" "$HF_URL")
-              echo "   HF URL Status: $STATUS2"
-            fi
-            
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+            echo "Ping $i/12 → $STATUS @ $(date)"
             sleep 5
           done
+
+      - name: Keep repo active
+        run: |
+          git config user.email "bot@github.com"
+          git config user.name "KeepAlive Bot"
+          echo "$(date)" >> .keepalive
+          git add .keepalive
+          git commit -m "keepalive $(date +%s)" || true
+          git push || true
+
+      - name: Self-trigger next run
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/keep-alive.yml/dispatches \
+            -d '{"ref":"main"}'
